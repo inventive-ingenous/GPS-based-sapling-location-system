@@ -1,64 +1,149 @@
-#include <TinyGPSPlus.h>
-#include <HardwareSerial.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <TinyGPSPlus.h>
 
-// ---------------- WIFI -----------------
+TinyGPSPlus gps;
+HardwareSerial gpsSerial(1); 
+
+// WiFi
 const char* ssid = "YOUR_WIFI_NAME";
 const char* password = "YOUR_WIFI_PASSWORD";
 
-// ---------- API URL --------------------
-String serverURL = "http://YOUR_PC_IP:3000/addSapling";  
-// Example: "http://192.168.1.5:3000/addSapling"
+// Backend API
+String serverURL = "http://YOUR_PC_IP:3000/api/saplings";
 
-// ----------- GPS Setup ----------------
-TinyGPSPlus gps;
-HardwareSerial GPS_Serial(2);  // UART2
+#define BUTTON_PIN 4
 
 void setup() {
   Serial.begin(115200);
+  gpsSerial.begin(9600, SERIAL_8N1, 16, 17);
+  
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
 
-  GPS_Serial.begin(9600, SERIAL_8N1, 16, 17);  // GPS (TX=16, RX=17)
-
+  // Connect WiFi
+  Serial.print("Connecting to WiFi...");
   WiFi.begin(ssid, password);
-  Serial.println("Connecting to WiFi...");
+
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
-  Serial.println("\nWiFi Connected!");
+  Serial.println("\nConnected!");
 }
 
 void loop() {
-  while (GPS_Serial.available()) {
-    gps.encode(GPS_Serial.read());
+  // Read GPS
+  while (gpsSerial.available()) {
+    gps.encode(gpsSerial.read());
+  }
 
-    if (gps.location.isUpdated()) {
-      double lat = gps.location.lat();
-      double lng = gps.location.lng();
+  if (digitalRead(BUTTON_PIN) == LOW) {
+    delay(300);
 
-      Serial.println("GPS Updated:");
+    if (gps.location.isValid()) {
+      float lat = gps.location.lat();
+      float lon = gps.location.lng();
+
+      Serial.println("Button Pressed. Sending Data:");
       Serial.println(lat, 6);
-      Serial.println(lng, 6);
+      Serial.println(lon, 6);
 
-      sendToServer(lat, lng);  
-      delay(2000);
+      sendData(lat, lon);
+    } else {
+      Serial.println("GPS not fixed!");
     }
   }
 }
 
-// ------------ SEND TO API ------------------
-void sendToServer(double lat, double lng) {
+void sendData(float lat, float lon) {
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
+
     http.begin(serverURL);
     http.addHeader("Content-Type", "application/json");
 
-    String json = "{\"lat\":" + String(lat, 6) + ",\"lng\":" + String(lng, 6) + "}";
+    String json = "{ \"latitude\": " + String(lat, 6) + 
+                  ", \"longitude\": " + String(lon, 6) + " }";
 
-    int code = http.POST(json);
-    Serial.print("Response: ");
-    Serial.println(code);
+    int httpResponseCode = http.POST(json);
+
+    Serial.print("HTTP Response: ");
+    Serial.println(httpResponseCode);
+
+    http.end();
+  }
+}
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <TinyGPSPlus.h>
+
+TinyGPSPlus gps;
+HardwareSerial gpsSerial(1); 
+
+// WiFi
+const char* ssid = "YOUR_WIFI_NAME";
+const char* password = "YOUR_WIFI_PASSWORD";
+
+// Backend API
+String serverURL = "http://YOUR_PC_IP:3000/api/saplings";
+
+#define BUTTON_PIN 4
+
+void setup() {
+  Serial.begin(115200);
+  gpsSerial.begin(9600, SERIAL_8N1, 16, 17);
+  
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+  // Connect WiFi
+  Serial.print("Connecting to WiFi...");
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nConnected!");
+}
+
+void loop() {
+  // Read GPS
+  while (gpsSerial.available()) {
+    gps.encode(gpsSerial.read());
+  }
+
+  if (digitalRead(BUTTON_PIN) == LOW) {
+    delay(300);
+
+    if (gps.location.isValid()) {
+      float lat = gps.location.lat();
+      float lon = gps.location.lng();
+
+      Serial.println("Button Pressed. Sending Data:");
+      Serial.println(lat, 6);
+      Serial.println(lon, 6);
+
+      sendData(lat, lon);
+    } else {
+      Serial.println("GPS not fixed!");
+    }
+  }
+}
+
+void sendData(float lat, float lon) {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+
+    http.begin(serverURL);
+    http.addHeader("Content-Type", "application/json");
+
+    String json = "{ \"latitude\": " + String(lat, 6) + 
+                  ", \"longitude\": " + String(lon, 6) + " }";
+
+    int httpResponseCode = http.POST(json);
+
+    Serial.print("HTTP Response: ");
+    Serial.println(httpResponseCode);
 
     http.end();
   }
