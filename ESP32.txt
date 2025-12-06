@@ -1,0 +1,65 @@
+#include <TinyGPSPlus.h>
+#include <HardwareSerial.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
+
+// ---------------- WIFI -----------------
+const char* ssid = "YOUR_WIFI_NAME";
+const char* password = "YOUR_WIFI_PASSWORD";
+
+// ---------- API URL --------------------
+String serverURL = "http://YOUR_PC_IP:3000/addSapling";  
+// Example: "http://192.168.1.5:3000/addSapling"
+
+// ----------- GPS Setup ----------------
+TinyGPSPlus gps;
+HardwareSerial GPS_Serial(2);  // UART2
+
+void setup() {
+  Serial.begin(115200);
+
+  GPS_Serial.begin(9600, SERIAL_8N1, 16, 17);  // GPS (TX=16, RX=17)
+
+  WiFi.begin(ssid, password);
+  Serial.println("Connecting to WiFi...");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi Connected!");
+}
+
+void loop() {
+  while (GPS_Serial.available()) {
+    gps.encode(GPS_Serial.read());
+
+    if (gps.location.isUpdated()) {
+      double lat = gps.location.lat();
+      double lng = gps.location.lng();
+
+      Serial.println("GPS Updated:");
+      Serial.println(lat, 6);
+      Serial.println(lng, 6);
+
+      sendToServer(lat, lng);  
+      delay(2000);
+    }
+  }
+}
+
+// ------------ SEND TO API ------------------
+void sendToServer(double lat, double lng) {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin(serverURL);
+    http.addHeader("Content-Type", "application/json");
+
+    String json = "{\"lat\":" + String(lat, 6) + ",\"lng\":" + String(lng, 6) + "}";
+
+    int code = http.POST(json);
+    Serial.print("Response: ");
+    Serial.println(code);
+
+    http.end();
+  }
+}
